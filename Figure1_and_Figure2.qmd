@@ -1,0 +1,983 @@
+---
+title: "Figure1"
+author: "Hannah Seifried "
+output: html_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+
+# Libraries
+library(corrplot)
+library(pheatmap)
+library(gridExtra)
+library(ggplot2)
+
+
+### SET DIRECTORY WITH DATA HERE
+knitr::opts_knit$set(root.dir = '~/OneDrive/Studium/MSc_CBB/Semester_1_2024_HS/STA426/project/DA_COMPARE_DATA_21_03_08/Hackathon/Studies/')
+setwd("~/OneDrive/Studium/MSc_CBB/Semester_1_2024_HS/STA426/project/DA_COMPARE_DATA_21_03_08/Hackathon/Studies/")
+
+###updated dataset names
+Data_set_names <- c( ArcticFireSoils="Soil - Fires",
+                     ArcticFreshwaters="Freshwater - Arctic",
+                     ArcticTransects="Soil - Arctic",
+                     art_scher="Human - RA",
+                     asd_son= "Human - ASD",
+                     BISCUIT= "Human - CD (1)",
+                     Blueberry= "Soil - Blueberry",
+                     cdi_schubert="Human - C. diff (1)",
+                     cdi_vincent="Human - C. diff (2)",
+                     Chemerin="Mouse Facilities",
+                     crc_baxter="Human - CC (1)",
+                     crc_zeller="Human - CC (2)",
+                     edd_singh="Human - Inf.",
+                     Exercise="Mouse - Exercised",
+                     glass_plastic_oberbeckmann="Marine - Plastic (4)",
+                     GWMC_ASIA_NA="WWSR - Continents",
+                     GWMC_HOT_COLD="WWSR - Temp.",
+                     hiv_dinh="Human - HIV (1)",
+                     hiv_lozupone="Human - HIV (2)",
+                     hiv_noguerajulian="Human - HIV (3)",
+                     ibd_gevers="Human - CD (2)",
+                     ibd_papa="Human - IBD",
+                     Ji_WTP_DS="Freshwater - Treat.",
+                     MALL="Human - ALL",
+                     ob_goodrich="Human - OB (1)",
+                     ob_ross="Human - OB (2)",
+                     ob_turnbaugh="Human - OB (3)",
+                     ob_zhu="Human - OB (4)",
+                     Office="Built - Office",
+                     par_scheperjans="Human - Par.",
+                     sed_plastic_hoellein="Marine - Plastic (2)",
+                     sed_plastic_rosato="Marine - Plastic (5)",
+                     seston_plastic_mccormick="River - Plastic",
+                     sw_plastic_frere="Marine - Plastic (1)",
+                     sw_sed_detender="Marine - Sediment",
+                     t1d_alkanani="Human - T1D (1)",
+                     t1d_mejialeon="Human - T1D (2)",
+                     wood_plastic_kesy="Marine - Plastic (3)")
+
+tool_names <- c(aldex2="ALDEx2", 
+                ancom="ANCOM-II", 
+                corncob="corncob", 
+                deseq2="DESeq2", 
+                edger="edgeR", 
+                lefse="LEfSe", 
+                limma_voom_TMM="limma voom (TMM)", 
+                limma_voom_TMMwsp="limma voom (TMMwsp)", 
+                maaslin2="MaAsLin2",
+                maaslin2rare="MaAsLin2 (rare)",
+                metagenomeSeq="metagenomeSeq",
+                ttestrare="t-test (rare)", 
+                wilcoxonclr="Wilcoxon (CLR)", 
+                wilcoxonrare="Wilcoxon (rare)")
+
+Metadata_renames <- c(log_N="log(Sample size)", 
+                      R.squared="Aitchson's Dist. Effect Size", 
+                      log_R.squared="log(Aitch. dist. effect size)", 
+                      Sparsity="Sparsity", 
+                      Richness="Richness",
+                      log_Depth="log(Max read depth)", 
+                      log_Depth_range="log(Read depth range)", 
+                      CoV_Depth="Read depth variation", 
+                      filtered_out_percent = "% below prev. cut-off")
+
+hackathon_study_ids <- c("ArcticFireSoils",
+                         "ArcticFreshwaters",
+                         "ArcticTransects",
+                         "art_scher",
+                         "asd_son",
+                         "BISCUIT",
+                         "Blueberry",
+                         "cdi_schubert",
+                         "cdi_vincent",
+                         "Chemerin",
+                         "crc_baxter",
+                         "crc_zeller",
+                         "edd_singh",
+                         "Exercise",
+                         "glass_plastic_oberbeckmann",
+                         "GWMC_ASIA_NA",
+                         "GWMC_HOT_COLD",
+                         "hiv_dinh",
+                         "hiv_lozupone",
+                         "hiv_noguerajulian",
+                         "ibd_gevers",
+                         "ibd_papa",
+                         "Ji_WTP_DS",
+                         "MALL",
+                         "ob_goodrich",
+                         "ob_ross",
+                         "ob_turnbaugh",
+                         "ob_zhu",
+                         "Office",
+                         "par_scheperjans",
+                         "sed_plastic_hoellein",
+                         "sed_plastic_rosato",
+                         "seston_plastic_mccormick",
+                         "sw_plastic_frere",
+                         "sw_sed_detender",
+                         "t1d_alkanani",
+                         "t1d_mejialeon",
+                         "wood_plastic_kesy")
+
+da_tools_out <- c("Aldex_out", 
+                  "ANCOM_out", 
+                  "Corncob_out", 
+                  "Deseq2_out", 
+                  "edgeR_out", 
+                  "Lefse_out",
+                  "Maaslin2_out", 
+                  "Maaslin2_rare_out", 
+                  "metagenomeSeq_out", 
+                  "t_test_rare_out", 
+                  "Wilcoxon_CLR_out", 
+                  "Wilcoxon_rare_out", 
+                  "limma_voom_tmm_out", 
+                  "limma_voom_TMMwsp")
+```
+
+# Check if all Tool Ran on all Studies
+```{r}
+# Function to create the presence table
+generate_presence_table <- function(results_type, hackathon_study_ids, da_tools_out) {
+  # Initialize an empty data frame
+  presence_table <- matrix(FALSE, nrow = length(hackathon_study_ids), ncol = length(da_tools_out))
+  rownames(presence_table) <- hackathon_study_ids
+  colnames(presence_table) <- da_tools_out
+  
+  # Loop through each study and tool to check for any .tsv file
+  for (study in hackathon_study_ids) {
+    for (tool in da_tools_out) {
+      # Construct the directory path
+      tool_dir <- file.path(".", study, results_type, tool)
+      
+      # Check if the tool directory exists
+      if (dir.exists(tool_dir)) {
+        # Now check if a .tsv file exists in the directory or its subdirectories
+        tsv_files <- list.files(tool_dir, pattern = "\\.tsv$", full.names = TRUE, recursive = TRUE)
+        if (length(tsv_files) >= 1) {
+          presence_table[study, tool] <- TRUE
+        }
+      } else {
+        print(paste("Directory does not exist:", tool_dir))
+      }
+    }
+  }
+  # Convert the matrix to a data frame for easier handling
+  presence_table <- as.data.frame(presence_table)
+  return(presence_table)
+}
+
+fix_results_table <- generate_presence_table("Fix_Results_0.1", hackathon_study_ids, da_tools_out)
+no_filt_results_table <- generate_presence_table("No_filt_Results", hackathon_study_ids, da_tools_out)
+
+#Directory does not exist: ./seston_plastic_mccormick
+#Directory does not exist: ./sw_plastic_frere
+#no study ran with Lefse_out
+```
+
+# Combine corrected P-values into same table
+```{r}
+
+
+```
+
+
+
+```{r}
+
+  
+  # Combine corrected P-values into same table.
+  all_rows <- c()
+  
+   for(da_tool in names(adjP_colname)) {
+     all_rows <- c(all_rows, rownames(da_tool_results[[da_tool]]))
+   }
+  all_rows <- all_rows[-which(duplicated(all_rows))]
+
+  adjP_table <- data.frame(matrix(NA, ncol=length(names(da_tool_results)), nrow=length(all_rows)))
+  colnames(adjP_table) <- names(da_tool_results)
+  rownames(adjP_table) <- all_rows
+  
+  for(da_tool in colnames(adjP_table)) {
+ 
+    if(da_tool %in% missing_tools) {
+       next
+    }
+    
+    if(da_tool == "lefse") {
+     
+        tmp_lefse <- da_tool_results[[da_tool]][, adjP_colname[[da_tool]]]
+        tmp_lefse[which(tmp_lefse == "-")] <- NA
+        adjP_table[rownames(da_tool_results[[da_tool]]), da_tool] <- as.numeric(tmp_lefse)
+
+        lefse_tested_asvs <- rownames(da_tool_results$wilcoxonrare)[which(! is.na(da_tool_results$wilcoxonrare))]
+        lefse_NA_asvs <- rownames(da_tool_results$lefse)[which(is.na(tmp_lefse))]
+  
+        adjP_table[lefse_NA_asvs[which(lefse_NA_asvs %in% lefse_tested_asvs)], da_tool] <- 1
+        
+    } else if(da_tool == "ancom") {
+      
+      sig_ancom_hits <- which(da_tool_results[[da_tool]][, adjP_colname[[da_tool]]])
+      ancom_results <- rep(1, length(da_tool_results[[da_tool]][, adjP_colname[[da_tool]]]))
+      ancom_results[sig_ancom_hits] <- 0
+      adjP_table[rownames(da_tool_results[[da_tool]]), da_tool] <- ancom_results
+    
+    } else if(da_tool %in% c("wilcoxonclr", "wilcoxonrare", "ttestrare")) {
+      
+      # Need to perform FDR-correction on these outputs.
+      adjP_table[rownames(da_tool_results[[da_tool]]), da_tool] <- p.adjust(da_tool_results[[da_tool]][, adjP_colname[[da_tool]]], "fdr")
+    
+    } else {
+      adjP_table[rownames(da_tool_results[[da_tool]]), da_tool] <- da_tool_results[[da_tool]][, adjP_colname[[da_tool]]]
+    }
+  }
+
+  return(list(raw_tables=da_tool_results,
+              adjP_table=adjP_table))
+  
+}
+
+
+```
+
+# Read in data
+
+## Results
+```{r}
+
+filt_results <- lapply(hackathon_study_ids, read_hackathon_results, results_folder = "Fix_Results_0.1")
+names(filt_results) <- hackathon_study_ids
+
+
+unfilt_results <- lapply(hackathon_study_ids, read_hackathon_results, results_folder = "No_filt_Results")
+names(unfilt_results) <- hackathon_study_ids
+
+#saveRDS(filt_results, "/home/jacob/GitHub_Repos/Hackathon_testing/Data/Filt_results_21_04_07.RDS")
+#saveRDS(unfilt_results, "/home/jacob/GitHub_Repos/Hackathon_testing/Data/Unfilt_results_21_04_07.RDS")
+
+```
+
+## ASV tables
+```{r}
+filt_study_tab <- list()
+filt_study_tab[["rare"]] <- list()
+filt_study_tab[["nonrare"]] <- list()
+
+Read_study_table <- function(address, grp_address){
+  con <- file(address)
+  file_1_line1 <- readLines(address,n=1)
+  close(con)
+
+  if(grepl("Constructed from biom file", file_1_line1)){
+    ASV_table <- read.table(address, sep="\t", skip=1, header=T, row.names = 1,
+                          comment.char = "", quote="", check.names = F)
+  }else{
+    ASV_table <- read.table(address, sep="\t", header=T, row.names = 1,
+                          comment.char = "", quote="", check.names = F)
+  }
+  ## read in groupings data and filter table
+  groupings <- read.table(grp_address, sep="\t", row.names = 1, header=T, comment.char = "", quote="", check.names = F)
+
+  #number of samples
+  sample_num <- length(colnames(ASV_table))
+  grouping_num <- length(rownames(groupings))
+
+  #check if sample number is the same
+  # if they are not then get intersect and filter ASV table to only include those in grp file
+  if(sample_num != grouping_num){
+      rows_to_keep <- intersect(colnames(ASV_table), rownames(groupings))
+      ASV_table <- ASV_table[,rows_to_keep]
+  }
+  return(ASV_table)
+}
+
+for (study in hackathon_study_ids){
+  #get file for grping file
+  grp_file_name <- list.files(path=paste(study,"/", sep=""), pattern = "_meta.*(.tsv)|(.csv)")
+  if(rlang::is_empty(grp_file_name)){
+    message("Grouping file was not located for ",study)
+  }else{
+      filt_study_tab[["nonrare"]][[study]] <- Read_study_table(paste(study, "/Fix_Results_0.1/fixed_non_rare_tables/", study, "_ASVs_table.tsv", sep=""),
+                                                           paste(study, "/",grp_file_name, sep=""))
+      filt_study_tab[["rare"]][[study]] <- Read_study_table(paste(study, "/Fix_Results_0.1/fixed_rare_tables/", study, "_ASVs_table.tsv", sep=""),
+                                                            paste(study,"/",grp_file_name, sep=""))
+  }
+}
+
+unfilt_study_tab <- list()
+unfilt_study_tab[["rare"]] <- list()
+unfilt_study_tab[["nonrare"]] <- list()
+
+for (study in hackathon_study_ids){
+  
+  
+   #get file for grping file
+  grp_file_name <- list.files(path=paste(study,"/", sep=""), pattern = "_meta.*(.tsv)|(.csv)")
+  if(rlang::is_empty(grp_file_name)){
+    message("Grouping file was not located for ",study)
+  }else{
+      unfilt_study_tab[["nonrare"]][[study]] <- Read_study_table(paste(study, "/No_filt_Results/fixed_non_rare_tables/", study, "_ASVs_table.tsv", sep=""),
+                                                           paste(study, "/",grp_file_name, sep=""))
+      unfilt_study_tab[["rare"]][[study]] <- Read_study_table(paste(study, "/No_filt_Results/fixed_rare_tables/", study, "_ASVs_table.tsv", sep=""),
+                                                            paste(study,"/",grp_file_name, sep=""))
+  }
+}
+
+#saveRDS(unfilt_study_tab, "/home/jacob/GitHub_Repos/Hackathon_testing/Data/unfilt_study_tab_21_04_07.RDS")
+#saveRDS(filt_study_tab, "/home/jacob/GitHub_Repos/Hackathon_testing/Data/filt_study_tab_21_04_07.RDS")
+```
+
+# Figure 1 Analysis
+
+## Read in data
+```{r}
+filt_results <- readRDS("/home/jacob/GitHub_Repos/Hackathon_testing/Data/Filt_results_21_04_07.RDS")
+unfilt_results <- readRDS("/home/jacob/GitHub_Repos/Hackathon_testing/Data/Unfilt_results_21_04_07.RDS")
+
+unfilt_study_tab  <- readRDS("/home/jacob/GitHub_Repos/Hackathon_testing/Data/unfilt_study_tab_21_04_07.RDS")
+filt_study_tab <- readRDS("/home/jacob/GitHub_Repos/Hackathon_testing/Data/filt_study_tab_21_04_07.RDS")
+
+```
+
+
+## Calculate dataset stats
+
+### Function
+```{r, function}
+Calc_Other_community_metrics <- function(List_tab){
+  Dataset_Char <- list()
+  Dataset_Char[["rare"]] <- list()
+  Dataset_Char[["nonrare"]] <- list()
+  ## Calculate Sparsity
+  
+  message("Calculating Sparsity")
+  ## deal with rare tables first
+  for(study in names(List_tab[["rare"]])){
+    #get current study table
+    study_table <- List_tab[["rare"]][[study]]
+    #get total number of cells
+    total_cells <- dim(study_table)[1] * dim(study_table)[2]
+    #get sparsity
+    Sparsity <- length(which(study_table==0))/total_cells
+    #assign Sparsity to data.
+    Dataset_Char[["rare"]][[study]][["Sparsity"]] <- Sparsity
+  }
+  ## deal with nonrare tables
+    for(study in names(List_tab[["nonrare"]])){
+    #get current study table
+    study_table <- List_tab[["nonrare"]][[study]]
+    #get total number of cells
+    total_cells <- dim(study_table)[1] * dim(study_table)[2]
+    #get sparsity
+    Sparsity <- length(which(study_table==0))/total_cells
+    #assign Sparsity to data.
+    Dataset_Char[["nonrare"]][[study]][["Sparsity"]] <- Sparsity
+  }
+  
+  message("Calculating Number of Features")
+  ## Calculate number of features
+  # deal with rare tables
+  for(study in names(List_tab[["rare"]])){
+    study_table <- List_tab[["rare"]][[study]]
+    #tables are features x samples
+    num_feats <- dim(study_table)[1]
+    
+    Dataset_Char[["rare"]][[study]][["Number of Features"]] <- num_feats
+  }
+  # deal with nonrare tables
+  for(study in names(List_tab[["nonrare"]])){
+    study_table <- List_tab[["nonrare"]][[study]]
+    num_feats <- dim(study_table)[1]
+    Dataset_Char[["nonrare"]][[study]][["Number of Features"]] <- num_feats
+  }
+
+  message("Calculating median read depth")
+  ## Calculate median read depth
+  #deal with rare tables
+  for(study in names(List_tab[["rare"]])){
+    study_table <- List_tab[["rare"]][[study]]
+    median_depth <- median(colSums(study_table))
+    Dataset_Char[["rare"]][[study]][["Median Depth"]] <- median_depth
+  }
+  #deal with nonrare tables
+  for(study in names(List_tab[["nonrare"]])){
+    study_table <- List_tab[["nonrare"]][[study]]
+    median_depth <- median(colSums(study_table))
+    Dataset_Char[["nonrare"]][[study]][["Median Depth"]] <- median_depth
+  }
+  message("Calculating median richness")
+  ## Calculate median richness
+  #deal with rare tables
+  for(study in names(List_tab[["rare"]])){
+    study_table <- List_tab[["rare"]][[study]]
+    binary_study_table <- study_table
+    binary_study_table[binary_study_table > 0] <- 1
+    median_richness <- median(colSums(binary_study_table))
+    Dataset_Char[["rare"]][[study]][["Median Richness"]] <- median_richness
+  }
+  #deal with nonrare tables
+  for(study in names(List_tab[["nonrare"]])){
+    study_table <- List_tab[["nonrare"]][[study]]
+    binary_study_table <- study_table
+    binary_study_table[binary_study_table > 0] <- 1
+    median_richness <- median(colSums(binary_study_table))
+    Dataset_Char[["nonrare"]][[study]][["Median Richness"]] <- median_richness
+  }
+  
+  message("Calculating depth range")
+  for(study in names(List_tab[["nonrare"]])){
+    study_table <- List_tab[["nonrare"]][[study]]
+    max_depth <- max(colSums(study_table))
+    min_depth <- min(colSums(study_table))
+    depth_range <- max_depth - min_depth
+    Dataset_Char[["nonrare"]][[study]][["Depth Range"]] <- depth_range
+    
+  }
+  
+  message("Calculate CoV for depth range")
+  for(study in names(List_tab[["nonrare"]])){
+    study_table <- List_tab[["nonrare"]][[study]]
+    mean_depth <- mean(colSums(study_table))
+    std_depth <- sd(colSums(study_table))
+    Cov <- std_depth/mean_depth
+    Dataset_Char[["nonrare"]][[study]][["Depth CoV"]] <- Cov
+  }
+  
+  return(Dataset_Char)
+}
+
+
+# Quickly calculate what percentage of ASVs were filtered out for the filtered tables.
+# Note that this is computed for the nonrare tables only as these are the only values used
+# in the manuscript for these analyses.
+Calc_percent_in_unfilt_only  <- function(filt_tab, unfilt_tab){
+  
+  prev_under_10percent.prev <- c()
+
+  for (study in names(filt_tab[["nonrare"]])) {
+
+    filt_ASV_count <- nrow(filt_tab[["nonrare"]][[study]])
+    
+    unfilt_ASV_count <- nrow(unfilt_tab[["nonrare"]][[study]])
+    
+    prev_under_10percent.prev <- c(prev_under_10percent.prev, ((unfilt_ASV_count - filt_ASV_count) / unfilt_ASV_count) * 100)
+    
+  }
+  
+  names(prev_under_10percent.prev) <- names(filt_tab[["nonrare"]])
+
+  return(prev_under_10percent.prev)
+}
+
+```
+#### Function_testing
+
+```{r, eval=F}
+test_list <- list()
+test_list[["rare"]] <- list()
+test_list[["nonrare"]] <- list()
+
+test_list[["rare"]][["dataset1"]] <- matrix(0:1, nrow=10,ncol=10)
+test_list[["nonrare"]][["dataset1"]] <- matrix(1, nrow=10, ncol=10)
+
+test_list[["rare"]][["dataset2"]] <- matrix(c(1,1000), nrow=10, ncol=10)
+test_list[["nonrare"]][["dataset2"]] <- matrix(c(0,1,500,1000), nrow=10, ncol=10)
+
+test_list[["rare"]][["dataset3"]] <- matrix(1, nrow=50, ncol=10)
+test_list[["nonrare"]][["dataset3"]] <- matrix(1, nrow=100, ncol=10)
+
+
+test_results <- Calc_Other_community_metrics(test_list)
+test_results
+
+
+test_list_filt <- test_list
+
+test_percent <- Calc_percent_in_unfilt_only(test_list, test_list_filt)
+test_percent
+
+## good returns as expected.
+
+test_list_filt[["nonrare"]][["dataset3"]] <- matrix(1, nrow=50, ncol=10)
+
+test_percent2 <- Calc_percent_in_unfilt_only(test_list_filt, test_list)
+test_percent2
+## returns 50 list rows in dataset3 as expected!
+
+```
+### Calculate
+```{r cal_dataset_char}
+filt_community_metrics <- Calc_Other_community_metrics(filt_study_tab)
+unfilt_community_metrics <- Calc_Other_community_metrics(unfilt_study_tab)
+
+unfilt_percent_under_10percent.prevalence <- Calc_percent_in_unfilt_only(filt_tab = filt_study_tab,
+                                                                       unfilt_tab = unfilt_study_tab)
+
+### generate tables
+filt_rare_metrics_df <- do.call(rbind, filt_community_metrics[[1]])
+filt_nonrare_metrics_df <- do.call(rbind, filt_community_metrics[[2]])
+
+unfilt_rare_metrics_df <- do.call(rbind, unfilt_community_metrics[[1]])
+unfilt_nonrare_metrics_df <- do.call(rbind, unfilt_community_metrics[[2]])
+
+#scale 
+scale_filt_rare_metrics_df <- scale(filt_rare_metrics_df)
+scale_filt_nonrare_metrics_df <- scale(filt_nonrare_metrics_df)
+scale_unfilt_rare_metrics_df <- scale(unfilt_rare_metrics_df)
+scale_unfilt_nonrare_metrics_df <- scale(unfilt_nonrare_metrics_df)
+```
+
+### Get Number of Significant ASVs
+```{r num_sig_ASV}
+sig_counts <- data.frame(matrix(NA,
+                                nrow=length(names(filt_results)),
+                                ncol=ncol(filt_results[[1]]$adjP_table) + 1))
+#set rownames to datasets
+rownames(sig_counts) <- names(filt_results)
+
+#set colnames to tool names
+colnames(sig_counts) <- c("dataset", colnames(filt_results[[1]]$adjP_table))
+
+#set dataset name
+sig_counts$dataset <- rownames(sig_counts)
+
+#set up dataframes to hold sig counts for filt and unfilt
+filt_sig_counts <- sig_counts
+filt_sig_percent <- sig_counts
+
+unfilt_sig_counts <- sig_counts
+unfilt_sig_percent <- sig_counts
+
+for(study in rownames(filt_sig_counts)) {
+  for(tool_name in colnames(filt_sig_counts)) {
+    
+    #skip over dataset column
+    if(tool_name == "dataset") { next }
+
+    if(! tool_name %in% colnames(filt_results[[study]]$adjP_table)) {
+      filt_sig_counts[study, tool_name] <- NA
+      filt_sig_percent[study, tool_name] <- NA
+      stop("Error tool name was not found in the result lookup table!!!!")
+      next
+    }
+    
+    #get number of significant features
+    #note that we loaded in ANCOM so that sig results were coded as 0 and non-sig was 1
+    filt_sig_counts[study, tool_name] <- length(which(filt_results[[study]]$adjP_table[, tool_name] < 0.05))
+    
+    # For rarified pipelines get total # ASVs from wilcoxonrare and for non-rarified get it from wilcoxonclr table.
+    if(tool_name %in% c("lefse", "maaslin2rare", "ttestrare", "wilcoxonrare")) {
+      filt_sig_percent[study, tool_name] <- (length(which(filt_results[[study]]$adjP_table[, tool_name] < 0.05)) / dim(filt_study_tab[["rare"]][[study]])[1]) * 100
+    } else {
+      filt_sig_percent[study, tool_name] <- (length(which(filt_results[[study]]$adjP_table[, tool_name] < 0.05)) / dim(filt_study_tab[["nonrare"]][[study]])[1]) * 100
+    }
+  }
+}
+
+#same as above but for unfilt datasets
+for(study in rownames(unfilt_sig_counts)) {
+  for(tool_name in colnames(unfilt_sig_counts)) {
+    
+    if(tool_name == "dataset") { next }
+
+    if(! tool_name %in% colnames(unfilt_results[[study]]$adjP_table)) {
+      unfilt_sig_counts[study, tool_name] <- NA
+      unfilt_sig_percent[study, tool_name] <- NA
+      stop("Error tool name was not found in the result lookup table!!!!")
+      next
+    }
+    
+    unfilt_sig_counts[study, tool_name] <- length(which(unfilt_results[[study]]$adjP_table[, tool_name] < 0.05))
+    
+    # For rarified pipelines get total # ASVs from wilcoxonrare and for non-rarified get it from wilcoxonclr table.
+    if(tool_name %in% c("lefse", "maaslin2rare", "ttestrare", "wilcoxonrare")) {
+      unfilt_sig_percent[study, tool_name] <- (length(which(unfilt_results[[study]]$adjP_table[, tool_name] < 0.05)) / dim(unfilt_study_tab[["rare"]][[study]])[1]) * 100
+    } else {
+      unfilt_sig_percent[study, tool_name] <- (length(which(unfilt_results[[study]]$adjP_table[, tool_name] < 0.05)) / dim(unfilt_study_tab[["nonrare"]][[study]])[1]) * 100
+    }
+  }
+}
+
+```
+
+### Mean percent across all datasets
+
+Across all filtered datasets:
+
+```{r print_mean_per_filt}
+filt_mean_percent <- print(sort(colSums(filt_sig_percent[, -1], na.rm = TRUE) / (colSums(! is.na(filt_sig_percent[, -1])))))
+```
+
+Across all unfiltered datasets:
+
+```{r print_mean_per_unfilt}
+unfilt_mean_percent <- print(sort(colSums(unfilt_sig_percent[, -1], na.rm = TRUE) / (colSums(! is.na(unfilt_sig_percent[, -1])))))
+```
+
+
+### HeatMaps
+
+Generate Heatmaps that appear as Figure1 in the manuscript
+#### Filter
+```{r}
+filt_sig_percent_scaled <- data.frame(scale(t(filt_sig_percent[, -1]), center = TRUE, scale = TRUE))
+
+hackathon_metadata_filt <- read.table("/home/jacob/GitHub_Repos/Hackathon_testing/Analysis_Scripts/Metadata/2020_06_18_Datasets_Hackathon.txt",
+                                 header = TRUE, sep = "\t", stringsAsFactors = FALSE, quote = "")
+rownames(hackathon_metadata_filt) <- hackathon_metadata_filt$Dataset.Name
+
+#remove ob_zupanic
+## dataset removed due to filtering removing all features
+## fixed prefix refers to the removal of this dataset
+fixed_hackathon_metadata_filt <- hackathon_metadata_filt[-which(rownames(hackathon_metadata_filt) == "ob_zupancic"), ]
+
+## Get sample sizes based on number of columns per dataset.
+dataset_sample_sizes <- sapply(filt_study_tab$nonrare, ncol)
+fixed_hackathon_metadata_filt$log_N <- log(dataset_sample_sizes[rownames(fixed_hackathon_metadata_filt)])
+
+#load in permanova results from atichsons distance with a 1 pseudocount
+aitchison_permanova <- read.table("/home/gavin/github_repos/hackathon/Comparison_of_DA_microbiome_methods/Misc_datafiles/aitchison_permanova_results.tsv",
+                                  header = TRUE, sep = "\t", row.names = 1)
+
+# attach r2 value for the filt-nonrare datasets
+fixed_hackathon_metadata_filt$R.squared <- aitchison_permanova[rownames(fixed_hackathon_metadata_filt), "filt_nonrare_R2"]
+
+# log r2 values for visualization purposes
+fixed_hackathon_metadata_filt$log_R.squared <- log(fixed_hackathon_metadata_filt$R.squared)
+
+## attach other dataset statistics that we calculated above
+
+sort_filt_nonrare_metrics_df <- filt_nonrare_metrics_df[rownames(fixed_hackathon_metadata_filt),,drop=F]
+fixed_hackathon_metadata_filt$Sparsity <- sort_filt_nonrare_metrics_df[,"Sparsity"]
+fixed_hackathon_metadata_filt$Richness <- sort_filt_nonrare_metrics_df[,"Median Richness"]
+fixed_hackathon_metadata_filt$log_Depth <- log(sort_filt_nonrare_metrics_df[,"Median Depth"])
+fixed_hackathon_metadata_filt$log_Depth_range <- log(sort_filt_nonrare_metrics_df[,"Depth Range"])
+fixed_hackathon_metadata_filt$CoV_Depth <- sort_filt_nonrare_metrics_df[,"Depth CoV"]
+
+#fix dataset names
+colnames(filt_sig_percent_scaled)
+fixed_ds_names <- Data_set_names[colnames(filt_sig_percent_scaled)]
+colnames(filt_sig_percent_scaled) <- fixed_ds_names
+
+colnames(filt_sig_percent_scaled)
+rownames(filt_sig_percent_scaled)
+
+
+## fix tool names now...
+tool_rename <- tool_names[rownames(filt_sig_percent_scaled)]
+rownames(filt_sig_percent_scaled) <- tool_rename
+
+### now fix dataset names for metadata
+rownames(fixed_hackathon_metadata_filt) <- Data_set_names[rownames(fixed_hackathon_metadata_filt)]
+
+# order them by dataset names so that they are sorted by environment
+Alpha_order_filt <- filt_sig_percent_scaled[,order(colnames(filt_sig_percent_scaled))]
+
+
+### now fix raw count dataframe
+
+## set tool names to proper presentation names
+raw_count_df <- t(filt_sig_counts[,-1])
+rownames(raw_count_df) <- tool_names[rownames(raw_count_df)]
+
+## fix dataset names
+colnames(raw_count_df) <- Data_set_names[colnames(raw_count_df)]
+
+## order them the same way as the sig_percent table
+order_raw_count_df <- raw_count_df[,colnames(Alpha_order_filt)]
+
+
+#make sure that they match up.
+identical(colnames(order_raw_count_df), colnames(Alpha_order_filt))
+
+#rename the metadata for plotting
+filt_metadata_col_to_rename <- which(colnames(fixed_hackathon_metadata_filt) %in% names(Metadata_renames))
+colnames(fixed_hackathon_metadata_filt)[filt_metadata_col_to_rename] <- Metadata_renames[colnames(fixed_hackathon_metadata_filt[filt_metadata_col_to_rename])]
+
+#sort rows by tool name
+Alpha_order_filt <- Alpha_order_filt[sort(rownames(Alpha_order_filt)), ]
+
+#sort rows by tool name
+order_raw_count_df <- order_raw_count_df[sort(rownames(order_raw_count_df)), ]
+
+## Create heatmap
+filt_ASV_nums <- pheatmap(t(Alpha_order_filt),
+                         clustering_method = "complete",
+                         legend=TRUE,
+                         display_numbers=t(order_raw_count_df),
+                         annotation_row=fixed_hackathon_metadata_filt[, c("log(Sample size)", "log(Aitch. dist. effect size)", 
+                                                                     "Sparsity", "Richness", "Read depth variation", 
+                                                                     "log(Read depth range)"), drop=FALSE],
+                         annotation_legend=FALSE,
+                         legend_labels = "% sig. features",
+                         treeheight_col = 0,
+                         cluster_cols = FALSE,
+                         cluster_rows = TRUE,
+                         main="Filtered",
+                         angle_col=315)
+
+#write.table(x=order_raw_count_df, file="~/GitHub_Repos/Clean_Hackathon/Plotting_data/Main_Figures/Figure1B_feat_count.csv", col.names = NA,
+          #  row.names = T, quote=F, sep=",")
+
+#write.table(x=fixed_hackathon_metadata_filt, file="~/GitHub_Repos/Clean_Hackathon/Plotting_data/Main_Figures/Figure1B_dataset_characteristics.csv", col.names = NA,
+           # row.names=T, quote=F, sep=",")
+```
+
+#### UnFilter
+
+Unfiltered heatmap that appears in Figure1 of the manuscript
+```{r}
+unfilt_sig_percent_scaled <- data.frame(scale(t(unfilt_sig_percent[, -1]), center = TRUE, scale = TRUE))
+
+hackathon_metadata_unfilt <- read.table("/home/jacob/GitHub_Repos/Hackathon_testing/Analysis_Scripts/Metadata/2020_06_18_Datasets_Hackathon.txt",
+                                 header = TRUE, sep = "\t", stringsAsFactors = FALSE, quote = "")
+rownames(hackathon_metadata_unfilt) <- hackathon_metadata_unfilt$Dataset.Name
+
+#remove ob_zupanic
+fixed_hackathon_metadata_unfilt <- hackathon_metadata_unfilt[-which(rownames(hackathon_metadata_unfilt) == "ob_zupancic"), ]
+
+## Get sample sizes based on number of columns per dataset.
+dataset_sample_sizes <- sapply(unfilt_study_tab$nonrare, ncol)
+fixed_hackathon_metadata_unfilt$log_N <- log(dataset_sample_sizes[rownames(fixed_hackathon_metadata_unfilt)])
+
+## Get r2 values
+aitchison_permanova <- read.table("/home/gavin/github_repos/hackathon/Comparison_of_DA_microbiome_methods/Misc_datafiles/aitchison_permanova_results.tsv", header = TRUE, sep = "\t", row.names = 1)
+
+#set R2 values into metadata sheet
+fixed_hackathon_metadata_unfilt$R.squared <- aitchison_permanova[rownames(fixed_hackathon_metadata_unfilt), "unfilt_nonrare_R2"]
+
+#set log R2 values into metadata sheet
+fixed_hackathon_metadata_unfilt$log_R.squared <- log(fixed_hackathon_metadata_unfilt$R.squared)
+
+## attach other dataset statistics
+
+sort_unfilt_nonrare_metrics_df <- unfilt_nonrare_metrics_df[rownames(fixed_hackathon_metadata_unfilt),,drop=F]
+fixed_hackathon_metadata_unfilt$Sparsity <- sort_unfilt_nonrare_metrics_df[,"Sparsity"]
+fixed_hackathon_metadata_unfilt$Richness <- sort_unfilt_nonrare_metrics_df[,"Median Richness"]
+fixed_hackathon_metadata_unfilt$log_Depth <- log(sort_unfilt_nonrare_metrics_df[,"Median Depth"])
+fixed_hackathon_metadata_unfilt$log_Depth_range <- log(sort_unfilt_nonrare_metrics_df[,"Depth Range"])
+fixed_hackathon_metadata_unfilt$CoV_Depth <- sort_unfilt_nonrare_metrics_df[,"Depth CoV"]
+
+fixed_hackathon_metadata_unfilt$filtered_out_percent <- unfilt_percent_under_10percent.prevalence[rownames(fixed_hackathon_metadata_unfilt)]
+
+#fix dataset names
+colnames(unfilt_sig_percent_scaled) <- Data_set_names[colnames(unfilt_sig_percent_scaled)]
+
+#fix tool names
+rownames(unfilt_sig_percent_scaled) <- tool_names[rownames(unfilt_sig_percent_scaled)]
+
+#order by dataset
+Alpha_order_unfilt <- unfilt_sig_percent_scaled[, order(colnames(unfilt_sig_percent_scaled))]
+
+#set raw counts tool names
+raw_counts_unfilt <- t(unfilt_sig_counts[, -which(colnames(unfilt_sig_counts) == "dataset")])
+rownames(raw_counts_unfilt) <- tool_names[rownames(raw_counts_unfilt)]
+
+#set dataset names
+colnames(raw_counts_unfilt) <- Data_set_names[colnames(raw_counts_unfilt)]
+fix_raw_counts_unfilt <- raw_counts_unfilt[, colnames(Alpha_order_unfilt)]
+
+
+identical(rownames(fix_raw_counts_unfilt), rownames(Alpha_order_unfilt))
+# fix metadata
+
+rownames(fixed_hackathon_metadata_unfilt) <- Data_set_names[rownames(fixed_hackathon_metadata_unfilt)]
+
+unfilt_metadata_col_to_rename <- which(colnames(fixed_hackathon_metadata_unfilt) %in% names(Metadata_renames))
+colnames(fixed_hackathon_metadata_unfilt)[unfilt_metadata_col_to_rename] <- Metadata_renames[colnames(fixed_hackathon_metadata_unfilt[unfilt_metadata_col_to_rename])]
+
+Alpha_order_unfilt <- Alpha_order_unfilt[sort(rownames(Alpha_order_unfilt)), ]
+fix_raw_counts_unfilt <- fix_raw_counts_unfilt[sort(rownames(fix_raw_counts_unfilt)), ]
+
+unfilt_ASV_nums <- pheatmap(t(Alpha_order_unfilt),
+                           clustering_method = "complete",
+                           legend=TRUE,
+                           display_numbers=t(fix_raw_counts_unfilt),
+                           annotation_row=fixed_hackathon_metadata_unfilt[, c("log(Sample size)", "log(Aitch. dist. effect size)", 
+                                                                       "Sparsity", "Richness", "Read depth variation", 
+                                                                       "log(Read depth range)", "% below prev. cut-off"), drop=FALSE],
+                           annotation_legend=FALSE,
+                           treeheight_col = 0,
+                           cluster_cols = FALSE,
+                           cluster_rows = TRUE,
+                           main="Unfiltered",
+                           angle_col=315)
+
+#write.table(x=fix_raw_counts_unfilt, file="~/GitHub_Repos/Clean_Hackathon/Plotting_data/Main_Figures/Figure1A_feat_count.csv", col.names = NA, 
+           # row.names = T, quote=F, sep=",")
+#write.table(x=fixed_hackathon_metadata_unfilt, file="~/GitHub_Repos/Clean_Hackathon/Plotting_data/Main_Figures/Figure1A_dataset_characteristics.csv", col.names=NA,
+            #row.names=T, quote=F, sep=",")
+
+```
+
+
+
+
+## Final Plot
+```{r}
+figure1_plot <- cowplot::plot_grid(unfilt_ASV_nums[[4]], filt_ASV_nums[[4]], nrow=2, labels=c('A', 'B'))
+
+ggsave(filename=paste(display_items_out, "Main_figures", "Figure1.pdf", sep="/"),
+       plot = figure1_plot, width = 9, height=13, units="in", dpi=600)
+
+ggsave(filename=paste(display_items_out, "Main_figures", "Figure1.png", sep="/"),
+       plot = figure1_plot, width = 9, height=13, units="in", dpi=150)
+```
+
+
+
+## Correlation Figure
+```{r}
+# Filter
+filt_sig_percent_fix <- filt_sig_percent[,-1]
+
+#fix dataset names
+rownames(filt_sig_percent_fix) <- Data_set_names[rownames(filt_sig_percent_fix)]
+
+#re order to make sure the datasets match up in order
+fixed_hackathon_metadata_filt <- fixed_hackathon_metadata_filt[rownames(filt_sig_percent_fix),]
+
+#create list to hold the spearman rho values for each correlation and the p-values
+filt_rhos <- list()
+filt_ps <- list()
+
+filt_dataset_characteristics <- c("log(Sample size)", "Aitchson's Dist. Effect Size", "log(Aitch. dist. effect size)",
+                                  "Sparsity", "Richness", "log(Max read depth)", "log(Read depth range)", "Read depth variation")
+
+#loop through each tool
+for(i in 1:length(colnames(filt_sig_percent_fix))){
+  ## set vectors that contain the pvals and rho values between that tools results and the metadata character.
+  temp_pvals <- vector()
+  temp_rhos <- vector()
+  
+  #go through all different dataset characteristics
+  for(filt_characteristic_i in 1:length(filt_dataset_characteristics)) {
+    # run correlation on each column of metadata and each tool
+
+    temp_pvals[[filt_characteristic_i]] <- cor.test(filt_sig_percent_fix[,i], fixed_hackathon_metadata_filt[, filt_dataset_characteristics[filt_characteristic_i]],
+                                                    method="spearman", exact=F)$p.value
+    temp_rhos[[filt_characteristic_i]] <- cor.test(filt_sig_percent_fix[,i], fixed_hackathon_metadata_filt[, filt_dataset_characteristics[filt_characteristic_i]],
+                                                   method="spearman", exact=F)$estimate
+  }
+  ## add the results to the final table list
+  filt_rhos[[i]] <- temp_rhos
+  filt_ps[[i]] <- temp_pvals
+}
+
+#bind them into data frames
+filt_rhos_df <- do.call(rbind, filt_rhos)
+filt_pvals_df <- do.call(rbind, filt_ps)
+
+#add rownames 
+rownames(filt_rhos_df) <- colnames(filt_sig_percent_fix)
+#fix rownames to match the published tool names
+rownames(filt_rhos_df) <- tool_rename[rownames(filt_rhos_df)]
+
+#same as above
+rownames(filt_pvals_df) <- colnames(filt_sig_percent_fix)
+rownames(filt_pvals_df) <- tool_rename[rownames(filt_pvals_df)]
+
+#sort by 
+filt_rhos_df <- filt_rhos_df[sort(rownames(filt_rhos_df)), ]
+filt_pvals_df <- filt_pvals_df[sort(rownames(filt_pvals_df)), ]
+
+#set column names to the correct metadata names
+colnames(filt_rhos_df) <- filt_dataset_characteristics
+colnames(filt_pvals_df) <- filt_dataset_characteristics
+
+#generate corrplot of the results using df that has rho values and then filter by df with pvals
+identical(rownames(filt_rhos_df), rownames(filt_pvals_df))
+identical(colnames(filt_rhos_df), colnames(filt_pvals_df))
+
+corrplot(filt_rhos_df[,-3],
+         p.mat = filt_pvals_df[,-3],
+         sig.level = 0.05,
+         insig = "blank",
+         full_col = FALSE,
+         tl.col = "black",
+         col = colorRampPalette(c("blue","white","red"))(200))
+
+# Saved manually as 8.5x11 inches as Misc_figures/Figure2B_Corrplot_Filt_raw.pdf
+#write.table(x=filt_rhos_df, file="~/GitHub_Repos/Clean_Hackathon/Plotting_data/Main_Figures/Figure2B_rho.csv", col.names = NA,
+           # row.names = T, quote=F, sep=",")
+
+#write.table(x=filt_pvals_df, file="~/GitHub_Repos/Clean_Hackathon/Plotting_data/Main_Figures/Figure2B_pval.csv", col.names=NA, row.names = T, quote=F, sep=",")
+
+### unfilt
+unfilt_dataset_characteristics <- c("log(Sample size)", "Aitchson's Dist. Effect Size", "log(Aitch. dist. effect size)",
+                                  "Sparsity", "Richness", "log(Max read depth)", "log(Read depth range)",
+                                  "Read depth variation", "% below prev. cut-off")
+
+unfilt_sig_percent_fix <- unfilt_sig_percent[,-1]
+
+#fix dataset names
+rownames(unfilt_sig_percent_fix) <- Data_set_names[rownames(unfilt_sig_percent_fix)]
+
+fixed_hackathon_metadata_unfilt <- fixed_hackathon_metadata_unfilt[rownames(unfilt_sig_percent_fix),]
+
+#list to have the rho values and pvals
+unfilt_rhos <- list()
+unfilt_ps <- list()
+
+for(i in 1:length(colnames(unfilt_sig_percent_fix))){
+  ##go through each Tool
+  temp_pvals_unfilt <- vector()
+  temp_rhos_unfilt <- vector()
+  
+  #go through all different dataset characteristics
+  for(unfilt_characteristic_i in 1:length(unfilt_dataset_characteristics)) {
+    temp_pvals_unfilt[[unfilt_characteristic_i]] <- cor.test(unfilt_sig_percent_fix[,i], fixed_hackathon_metadata_unfilt[, unfilt_dataset_characteristics[unfilt_characteristic_i]],
+                                                             method="spearman", exact=F)$p.value
+    temp_rhos_unfilt[[unfilt_characteristic_i]] <- cor.test(unfilt_sig_percent_fix[,i], fixed_hackathon_metadata_unfilt[, unfilt_dataset_characteristics[unfilt_characteristic_i]],
+                                                            method="spearman", exact=F)$estimate
+  }
+  
+  unfilt_rhos[[i]] <- temp_rhos_unfilt
+  unfilt_ps[[i]] <- temp_pvals_unfilt
+}
+
+unfilt_rhos_df <- do.call(rbind, unfilt_rhos)
+unfilt_pvals_df <- do.call(rbind, unfilt_ps)
+
+rownames(unfilt_rhos_df) <- colnames(unfilt_sig_percent_fix)
+
+rownames(unfilt_rhos_df) <- tool_rename[rownames(unfilt_rhos_df)]
+
+rownames(unfilt_pvals_df) <- colnames(unfilt_sig_percent_fix)
+rownames(unfilt_pvals_df) <- tool_rename[rownames(unfilt_pvals_df)]
+
+unfilt_rhos_df <- unfilt_rhos_df[sort(rownames(unfilt_rhos_df)), ]
+unfilt_pvals_df <- unfilt_pvals_df[sort(rownames(unfilt_pvals_df)), ]
+
+colnames(unfilt_rhos_df) <- unfilt_dataset_characteristics
+colnames(unfilt_pvals_df) <- unfilt_dataset_characteristics
+
+corrplot(as.matrix(unfilt_rhos_df[,-3]),
+         p.mat = unfilt_pvals_df[,-3],
+         sig.level = 0.05,
+         insig = "blank",
+         full_col = FALSE,
+         tl.col = "black",
+         col = colorRampPalette(c("blue","white","red"))(200))
+
+# Saved manually as 8.5x11 inches as Misc_figures/Figure2A_Corrplot_Unfilt_raw.pdf
+#write.table(x=unfilt_rhos_df, file = "~/GitHub_Repos/Clean_Hackathon/Plotting_data/Main_Figures/Figure2A_rho.csv", col.names =NA,
+ #           row.names = T, quote=F, sep=",")
+
+#write.table(x=unfilt_pvals_df, file="~/GitHub_Repos/Clean_Hackathon/Plotting_data/Main_Figures/Figure2A_pval.csv", col.names = NA, row.names = T, quote=F, sep=",")
+```
+
+## Rho values to report in main text
+```{r}
+print("Filtered")
+sort(filt_rhos_df[, "Aitchson's Dist. Effect Size"])
+
+print("========================")
+
+print("Unfiltered")
+sort(unfilt_rhos_df[, "Aitchson's Dist. Effect Size"])
+
+```
